@@ -14,7 +14,7 @@ use zoe::prelude::*;
 
 /// Holds arguments for the APD CLI.
 #[derive(Debug, Parser)]
-#[command(about = "Tool for calculating average-pairwise distances")]
+#[command(about = "Tool for calculating amino acid difference tables")]
 pub struct APDArgs {
     #[arg(short = 'i', long)]
     /// Optional input fasta
@@ -27,18 +27,20 @@ pub struct APDArgs {
     #[arg(short = 't', long)]
     /// Turns on simultaneous multi-threading
     multi_threaded: bool,
+
+    #[arg(short = 'e', long)]
+    /// Use unix line-endings instead of Windows ones
+    unix_line_endings: bool,
 }
 
 /// CLI entry point
 fn main() {
     let args = APDArgs::parse();
+    let line_ending = if args.unix_line_endings { "" } else { "\r" };
 
     let mut reader = if let Some(ref file_path) = args.input_fasta {
         FastaReader::new(BufReader::new(Either::Left(
-            OpenOptions::new()
-                .read(true)
-                .open(file_path)
-                .expect("File opening error"),
+            OpenOptions::new().read(true).open(file_path).expect("File opening error"),
         )))
     } else {
         FastaReader::new(BufReader::new(Either::Right(stdin())))
@@ -62,24 +64,26 @@ fn main() {
         std::process::exit(1);
     };
     // TODO: recode to IUPAC if not in IUPAC.
-    let reference = dna_reference.translate();
+    let reference = {
+        let mut r = dna_reference.translate();
+        r.sequence.replace_all_bytes(b'~', b'X');
+        r
+    };
 
     let other_sequences = reader
-        .map(|record| 
+        .map(|record|
             // TODO: recode to IUPAC
             // TODO: don't translate, instead defer until later
-            record.map(|r| r.translate()) 
-              
-        )
-        .collect::<Result<Vec<_>,_>>().unwrap_or_die("Could not process other data.");
-
+            record.map(|r| {let mut aa = r.translate(); aa.sequence.replace_all_bytes(b'~',b'X'); aa}))
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap_or_die("Could not process other data.");
 
     let mut buffer = format!(",{}", reference.name);
     for query_header in other_sequences.iter().map(|f| f.name.as_str()) {
         buffer.push(',');
         buffer.push_str(query_header);
     }
-    writeln!(&mut writer, "{buffer}").unwrap_or_fail();
+    writeln!(&mut writer, "{buffer}{line_ending}").unwrap_or_fail();
 
     for (i, ref_aa) in reference.sequence.into_iter().enumerate() {
         let mut differences_found = false;
@@ -90,8 +94,7 @@ fn main() {
         // TODO: make sure you use uppercase for both
         // TODO: do we annotate deletions?
         for query_aa in other_sequences.iter().map(|f| f.sequence[i]) {
-            if ref_aa != query_aa && query_aa.is_ascii_alphabetic() && ref_aa.is_ascii_alphabetic()
-            {
+            if ref_aa != query_aa && query_aa.is_ascii_alphabetic() {
                 buffer.push_str(r#",""#);
                 buffer.push(query_aa as char);
                 buffer.push('"');
@@ -102,13 +105,7 @@ fn main() {
         }
 
         if differences_found {
-            writeln!(
-                &mut writer,
-                "{p},{aa}{buffer}",
-                p = i + 1,
-                aa = ref_aa as char
-            )
-            .unwrap_or_fail();
+            writeln!(&mut writer, "{p},{aa}{buffer}{line_ending}", p = i + 1, aa = ref_aa as char).unwrap_or_fail();
         }
     }
 
