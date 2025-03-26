@@ -6,9 +6,10 @@ use either::Either;
 use std::{
     fs::OpenOptions,
     io::{BufReader, BufWriter, Write, stdin, stdout},
+    ops::Range,
     path::PathBuf,
 };
-use zoe::prelude::*;
+use zoe::{data::fasta::FastaNT, prelude::*};
 
 // TODO: we want to change the delimiter
 
@@ -27,6 +28,11 @@ pub struct APDArgs {
     #[arg(short = 't', long)]
     /// Turns on simultaneous multi-threading
     multi_threaded: bool,
+
+    // This appeared to be available in the legacy program.
+    #[arg(short = 'r', long)]
+    /// Restrict to non-ambiguous alignable regions, pairwise.
+    restrict_to_pairwise_alignable: bool,
 
     #[arg(short = 'e', long)]
     /// Use unix line-endings instead of Windows ones
@@ -69,12 +75,24 @@ fn main() {
         r.sequence.replace_all_bytes(b'~', b'X');
         r
     };
+    let ref_range = get_valid_range(&reference.sequence, args.restrict_to_pairwise_alignable);
 
     let other_sequences = reader
         .map(|record|
             // TODO: recode to IUPAC
             // TODO: don't translate, instead defer until later
-            record.map(|r| {let mut aa = r.translate(); aa.sequence.replace_all_bytes(b'~',b'X'); aa}))
+            record.map(|r| {
+                let FastaNT { name, sequence } = r.into();
+                let mut residues: AminoAcids = sequence.to_aa_iter().collect();
+                residues.replace_all_bytes(b'~',b'X');
+                let valid_range = get_valid_range(&residues, args.restrict_to_pairwise_alignable);
+
+                ValidSeq {
+                    name, residues,
+                    _codons: sequence,
+                    valid_range
+                }
+              }))
         .collect::<Result<Vec<_>, _>>()
         .unwrap_or_die("Could not process other data.");
 
@@ -85,18 +103,21 @@ fn main() {
     }
     writeln!(&mut writer, "{buffer}{line_ending}").unwrap_or_fail();
 
-    for (i, ref_aa) in reference.sequence.into_iter().enumerate() {
+    for (i, &ref_aa) in reference.sequence[ref_range].iter().enumerate() {
         let mut differences_found = false;
         buffer.clear();
 
         // TODO: grab codon in the future instead and consider not resolvable ambiguations
-        // TODO: check all sequences have same length earlier
         // TODO: make sure you use uppercase for both
-        // TODO: do we annotate deletions?
-        for query_aa in other_sequences.iter().map(|f| f.sequence[i]) {
-            if ref_aa != query_aa && query_aa.is_ascii_alphabetic() {
+        for (query_aa, valid_range) in other_sequences.iter().map(|f| (f.residues[i], &f.valid_range)) {
+            if valid_range.contains(&i) && ref_aa != query_aa {
                 buffer.push_str(r#",""#);
-                buffer.push(query_aa as char);
+
+                if query_aa == b'-' {
+                    buffer.push_str("del");
+                } else {
+                    buffer.push(query_aa as char);
+                }
                 buffer.push('"');
                 differences_found = true;
             } else {
@@ -110,4 +131,27 @@ fn main() {
     }
 
     writer.flush().unwrap_or_fail();
+}
+
+struct ValidSeq {
+    name:        String,
+    residues:    AminoAcids,
+    _codons:     Nucleotides,
+    valid_range: std::ops::Range<usize>,
+}
+
+fn get_valid_range(aa: &AminoAcids, restrict: bool) -> Range<usize> {
+    if restrict {
+        let (Some(s), Some(e)) = (
+            aa.iter().position(|&aa| aa != b'X' && aa != b'-'),
+            aa.iter().rposition(|&aa| aa != b'X' && aa != b'-'),
+        ) else {
+            eprintln!("Sequence doesn't contain valid data for comparison.");
+            std::process::exit(1);
+        };
+
+        s..e + 1
+    } else {
+        0..aa.len()
+    }
 }
