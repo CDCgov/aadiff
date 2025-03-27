@@ -10,12 +10,13 @@ A port of work by James Smagala for acceleration of RainbowTree and other use ca
 - Must be DNA
 - Must be aligned
 - Optionally: only alignable portions can be compared, e.g., the range containing the first and last non-ambiguous amino acid residue.
-- To be confirmed: deletion variants may be denoted as "del"
 
 ### Disambiguation
 
 - Must be IUPAC
 - Reference is not disambiguated
-- All possible amino acid translations will be reported.
+- Change: we only report up to 3 ambiguous translations
 
-Note: would it be better to limit the translations to 3 AA? Beyond that it is kind of silly.
+### Open questions
+
+- Should we scrub delimiters from strain names? Otherwise we could fail.
