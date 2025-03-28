@@ -22,8 +22,8 @@ pub struct APDArgs {
     input_fasta: Option<PathBuf>,
 
     #[arg(short = 'o', long)]
-    /// Optional output delimited
-    output_tsv: Option<PathBuf>,
+    /// Optional output delimited file
+    output_xsv: Option<PathBuf>,
 
     #[arg(short = 'r', long)]
     /// Restrict to non-ambiguous alignable regions, pairwise.
@@ -51,7 +51,7 @@ fn main() {
         FastaReader::new(BufReader::new(Either::Right(stdin())))
     };
 
-    let mut writer = if let Some(ref file_path) = args.output_tsv {
+    let mut writer = if let Some(ref file_path) = args.output_xsv {
         BufWriter::new(Either::Left(
             OpenOptions::new()
                 .write(true)
