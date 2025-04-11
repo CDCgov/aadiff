@@ -12,7 +12,10 @@ use std::{
     ops::Range,
     path::PathBuf,
 };
-use zoe::{data::fasta::FastaNT, prelude::*};
+use zoe::{
+    data::fasta::{FastaAA, FastaNT},
+    prelude::*,
+};
 
 #[derive(Debug, Parser)]
 #[command(about = "Tool for calculating amino acid difference tables")]
@@ -68,22 +71,22 @@ fn main() {
         eprintln!("No first record available!");
         std::process::exit(1);
     };
-    // TODO: recode to IUPAC if not in IUPAC.
+
     let reference = {
-        let mut r = dna_reference.translate();
-        r.sequence.replace_all_bytes(b'~', b'X');
-        r
+        let r = dna_reference.recode_to_dna();
+        FastaAA {
+            name:     r.name,
+            sequence: r.sequence.to_aa_iter_with(b'X').collect(),
+        }
     };
     let ref_range = get_valid_range(&reference.sequence, args.restrict_to_pairwise_alignable);
 
     let other_sequences = reader
         .map(|record|
-            // TODO: recode to IUPAC
             // TODO: don't translate, instead defer until later
             record.map(|r| {
-                let FastaNT { name, sequence } = r.into();
-                let mut residues: AminoAcids = sequence.to_aa_iter().collect();
-                residues.replace_all_bytes(b'~',b'X');
+                let FastaNT { name, sequence } = r.recode_to_dna();
+                   let residues = sequence.to_aa_iter_with(b'X').collect();
                 let valid_range = get_valid_range(&residues, args.restrict_to_pairwise_alignable);
 
                 ValidSeq {
@@ -106,7 +109,6 @@ fn main() {
         let mut differences_found = false;
         buffer.clear();
 
-        // TODO: make sure you use uppercase for both
         for ValidSeq {
             name: _,
             residues,

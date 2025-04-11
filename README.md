@@ -54,7 +54,7 @@ ls -l target/release/aadiff*
 ### TODO
 
 - Should we scrub delimiters from strain names? Otherwise we could fail.
-- Actually deal with IUPAC mapping
+- Provide JSON output
 
 ### Output
 
