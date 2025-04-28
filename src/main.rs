@@ -39,12 +39,17 @@ pub struct APDArgs {
     #[arg(short = 'd', long)]
     /// Use the provider delimiter for separating fields. Default is ','
     output_delimiter: Option<char>,
+
+    #[arg(short = 'j', long)]
+    /// Use json schema for output
+    output_json: bool,
 }
 
 fn main() {
     let args = APDArgs::parse();
     let line_ending = if args.unix_line_endings { "" } else { "\r" };
     let delim = args.output_delimiter.unwrap_or(',');
+    let json_file = args.output_json;
 
     let mut reader = if let Some(ref file_path) = args.input_fasta {
         FastaReader::new(BufReader::new(Either::Left(
@@ -98,59 +103,122 @@ fn main() {
         .collect::<Result<Vec<_>, _>>()
         .unwrap_or_die("Could not process other data.");
 
-    let mut buffer = format!("{delim}{name}", name = reference.name);
-    for query_header in other_sequences.iter().map(|f| f.name.as_str()) {
-        buffer.push(delim);
-        buffer.push_str(query_header);
-    }
-    writeln!(&mut writer, "{buffer}{line_ending}").unwrap_or_fail();
+    if json_file {
+        let mut buffer = format!("");
+        let ref_name = reference.name;
+        let lbracket = "{";
+        let rbracket = "}";
 
-    for (i, &ref_aa) in reference.sequence[ref_range].iter().enumerate() {
-        let mut differences_found = false;
-        buffer.clear();
+        write!(&mut writer, "{lbracket}").unwrap_or_fail();
+        let mut first_position = false;
+        for (i, &ref_aa) in reference.sequence[ref_range].iter().enumerate() {
+            let mut differences_found = false;
+            buffer.clear();
 
-        for ValidSeq {
-            name: _,
-            residues,
-            codons,
-            valid_range,
-        } in other_sequences.iter()
-        {
-            let aa = residues[i];
-            let codon = [codons[i * 3], codons[i * 3 + 1], codons[i * 3 + 2]];
+            other_sequences.iter().for_each(
+                |ValidSeq {
+                     residues,
+                     codons,
+                     valid_range,
+                     name,
+                 }| {
+                    buffer.push_str(&format!(", \"{name}\": "));
+                    let aa = residues[i];
+                    let codon = [codons[i * 3], codons[i * 3 + 1], codons[i * 3 + 2]];
 
-            if valid_range.contains(&i) && ref_aa != aa {
-                buffer.push_str(&format!("{delim}\""));
+                    if valid_range.contains(&i) && ref_aa != aa {
+                        if aa == b'-' {
+                            buffer.push_str("\"del\"");
+                        } else if aa == b'X'
+                            && let Some(degen_aa) = GC3.get(&codon)
+                        {
+                            // We currently support degeneracy up to 3 distinct as beyond that it is kind of useless.
+                            buffer.push_str(&format!("\"{degen_aa}\""));
+                        } else {
+                            buffer.push_str(&format!("\""));
+                            buffer.push(aa as char);
+                            buffer.push_str(&format!("\""));
+                        }
 
-                if aa == b'-' {
-                    buffer.push_str("del");
-                } else if aa == b'X'
-                    && let Some(degen_aa) = GC3.get(&codon)
-                {
-                    // We currently support degeneracy up to 3 distinct as beyond that it is kind of useless.
-                    buffer.push_str(degen_aa);
-                } else {
-                    buffer.push(aa as char);
+                        differences_found = true;
+                    } else {
+                        buffer.push_str(&format!("\"\""));
+                    }
+                },
+            );
+
+            if differences_found {
+                if first_position {
+                    write!(&mut writer, ",");
                 }
-                buffer.push('"');
-                differences_found = true;
-            } else {
-                buffer.push(delim);
+                write!(
+                    &mut writer,
+                    "\"{p}\": {lbracket}\"{ref_name}\":\"{aa}\"{buffer}{rbracket}",
+                    p = i + 1,
+                    aa = ref_aa as char
+                )
+                .unwrap_or_fail();
+                first_position = true;
+            }
+        }
+        write!(&mut writer, "{rbracket}").unwrap_or_fail();
+
+        writer.flush().unwrap_or_fail();
+    } else {
+        let mut buffer = format!("{delim}{name}", name = reference.name);
+        for query_header in other_sequences.iter().map(|f| f.name.as_str()) {
+            buffer.push(delim);
+            buffer.push_str(query_header);
+        }
+        writeln!(&mut writer, "{buffer}{line_ending}").unwrap_or_fail();
+
+        for (i, &ref_aa) in reference.sequence[ref_range].iter().enumerate() {
+            let mut differences_found = false;
+            buffer.clear();
+
+            for ValidSeq {
+                name: _,
+                residues,
+                codons,
+                valid_range,
+            } in other_sequences.iter()
+            {
+                let aa = residues[i];
+                let codon = [codons[i * 3], codons[i * 3 + 1], codons[i * 3 + 2]];
+
+                if valid_range.contains(&i) && ref_aa != aa {
+                    buffer.push_str(&format!("{delim}\""));
+
+                    if aa == b'-' {
+                        buffer.push_str("del");
+                    } else if aa == b'X'
+                        && let Some(degen_aa) = GC3.get(&codon)
+                    {
+                        // We currently support degeneracy up to 3 distinct as beyond that it is kind of useless.
+                        buffer.push_str(degen_aa);
+                    } else {
+                        buffer.push(aa as char);
+                    }
+                    buffer.push('"');
+                    differences_found = true;
+                } else {
+                    buffer.push(delim);
+                }
+            }
+
+            if differences_found {
+                writeln!(
+                    &mut writer,
+                    "{p}{delim}{aa}{buffer}{line_ending}",
+                    p = i + 1,
+                    aa = ref_aa as char
+                )
+                .unwrap_or_fail();
             }
         }
 
-        if differences_found {
-            writeln!(
-                &mut writer,
-                "{p}{delim}{aa}{buffer}{line_ending}",
-                p = i + 1,
-                aa = ref_aa as char
-            )
-            .unwrap_or_fail();
-        }
+        writer.flush().unwrap_or_fail();
     }
-
-    writer.flush().unwrap_or_fail();
 }
 
 struct ValidSeq {
