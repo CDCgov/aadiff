@@ -3,7 +3,7 @@
 
 pub(crate) mod data;
 
-use crate::data::GC3;
+use crate::data::GC_2_3;
 use clap::Parser;
 use either::Either;
 use std::{
@@ -13,7 +13,10 @@ use std::{
     path::PathBuf,
 };
 use zoe::{
-    data::fasta::{FastaAA, FastaNT},
+    data::{
+        fasta::{FastaAA, FastaNT},
+        nucleotides::GetCodons,
+    },
     prelude::*,
 };
 
@@ -104,12 +107,10 @@ fn main() {
         .unwrap_or_die("Could not process other data.");
 
     if json_file {
-        let mut buffer = format!("");
+        let mut buffer = String::new();
         let ref_name = reference.name;
-        let lbracket = "{";
-        let rbracket = "}";
 
-        write!(&mut writer, "{lbracket}").unwrap_or_fail();
+        write!(&mut writer, "{{").unwrap_or_fail();
         let mut first_position = false;
         for (i, &ref_aa) in reference.sequence[ref_range].iter().enumerate() {
             let mut differences_found = false;
@@ -122,38 +123,37 @@ fn main() {
                      valid_range,
                      name,
                  }| {
-                    buffer.push_str(&format!(", \"{name}\": "));
+                    buffer.push_str(&format!(r#", "{name}": "#));
                     let aa = residues[i];
-                    let codon = [codons[i * 3], codons[i * 3 + 1], codons[i * 3 + 2]];
 
                     if valid_range.contains(&i) && ref_aa != aa {
                         if aa == b'-' {
                             buffer.push_str("\"del\"");
                         } else if aa == b'X'
-                            && let Some(degen_aa) = GC3.get(&codon)
+                            && let Some(degen_aa) = GC_2_3.get(&codons.nth_codon(i))
                         {
                             // We currently support degeneracy up to 3 distinct as beyond that it is kind of useless.
                             buffer.push_str(&format!("\"{degen_aa}\""));
                         } else {
-                            buffer.push_str(&format!("\""));
+                            buffer.push('"');
                             buffer.push(aa as char);
-                            buffer.push_str(&format!("\""));
+                            buffer.push('"');
                         }
 
                         differences_found = true;
                     } else {
-                        buffer.push_str(&format!("\"\""));
+                        buffer.push_str("\"\"");
                     }
                 },
             );
 
             if differences_found {
                 if first_position {
-                    write!(&mut writer, ",");
+                    write!(&mut writer, ",").unwrap_or_fail();
                 }
                 write!(
                     &mut writer,
-                    "\"{p}\": {lbracket}\"{ref_name}\":\"{aa}\"{buffer}{rbracket}",
+                    r#""{p}": {{"{ref_name}": "{aa}"{buffer}}}"#,
                     p = i + 1,
                     aa = ref_aa as char
                 )
@@ -161,7 +161,7 @@ fn main() {
                 first_position = true;
             }
         }
-        write!(&mut writer, "{rbracket}").unwrap_or_fail();
+        write!(&mut writer, "}}").unwrap_or_fail();
 
         writer.flush().unwrap_or_fail();
     } else {
@@ -184,7 +184,6 @@ fn main() {
             } in other_sequences.iter()
             {
                 let aa = residues[i];
-                let codon = [codons[i * 3], codons[i * 3 + 1], codons[i * 3 + 2]];
 
                 if valid_range.contains(&i) && ref_aa != aa {
                     buffer.push_str(&format!("{delim}\""));
@@ -192,7 +191,7 @@ fn main() {
                     if aa == b'-' {
                         buffer.push_str("del");
                     } else if aa == b'X'
-                        && let Some(degen_aa) = GC3.get(&codon)
+                        && let Some(degen_aa) = GC_2_3.get(&codons.nth_codon(i))
                     {
                         // We currently support degeneracy up to 3 distinct as beyond that it is kind of useless.
                         buffer.push_str(degen_aa);

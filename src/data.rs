@@ -8,7 +8,7 @@ macro_rules! fill_gc3 {
    }}
 }
 
-pub(crate) static GC3: LazyLock<HashMap<[u8; 3], &'static str>> = LazyLock::new(|| {
+pub(crate) static GC_2_3: LazyLock<HashMap<[u8; 3], &'static str>> = LazyLock::new(|| {
     fill_gc3!(
         b"AAB" => "K/N",   b"AAD" => "K/N",   b"AAH" => "K/N",   b"AAK" => "K/N",   b"AAM" => "K/N",
         b"AAN" => "K/N",   b"AAS" => "K/N",   b"AAV" => "K/N",   b"AAW" => "K/N",   b"ABA" => "I/R/T",

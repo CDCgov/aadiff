@@ -7,7 +7,7 @@ edition = "2024"
 clap = { version = "4", features = ["derive"] }
 either = "1"
 
-zoe = { git = "https://github.com/CDCgov/zoe.git", tag = "v0.0.15", default-features = false, features = [
+zoe = { git = "https://github.com/CDCgov/zoe.git", tag = "v0.0.16", default-features = false, features = [
     "multiversion",
 ] }
 

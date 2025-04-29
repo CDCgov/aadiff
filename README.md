@@ -54,7 +54,6 @@ ls -l target/release/aadiff*
 ### TODO
 
 - Should we scrub delimiters from strain names? Otherwise we could fail.
-- Provide JSON output
 
 ### Output
 
