@@ -161,7 +161,7 @@ fn main() {
                 first_position = true;
             }
         }
-        write!(&mut writer, "}}").unwrap_or_fail();
+        writeln!(&mut writer, "}}").unwrap_or_fail();
 
         writer.flush().unwrap_or_fail();
     } else {
