@@ -126,12 +126,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7943c866cc5cd64cbc25b2e01621d07fa8eb2a1a23160ee81ce38704e97b8ecf"
 
 [[package]]
-name = "itoa"
-version = "1.0.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
-
-[[package]]
 name = "multiversion"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -287,9 +281,9 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "zoe"
-version = "0.0.15"
-source = "git+https://github.com/CDCgov/zoe.git?tag=v0.0.15#ba0ec261bb576e7fe036ceff7f87f7be50fba911"
+version = "0.0.31"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47f6c50a0c4865ccbdb6a15c0b20c8d9ab057397b6102cca2c1f46ccb7b5de3c"
 dependencies = [
- "itoa",
  "multiversion",
 ]
