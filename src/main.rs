@@ -11,10 +11,7 @@ use std::{
     ops::Range,
     path::PathBuf,
 };
-use zoe::{
-    data::fasta::{FastaAA, FastaNT},
-    prelude::*,
-};
+use zoe::{data::fasta::Fasta, prelude::*};
 
 #[derive(Debug, Parser)]
 #[command(about = "Tool for calculating amino acid difference tables")]
@@ -73,8 +70,8 @@ fn main() {
 
     let reference = {
         let r = dna_reference.recode_to_dna();
-        FastaAA {
-            name:     r.name,
+        Fasta {
+            header:   r.header,
             sequence: r.sequence.to_aa_iter_with(b'X').collect(),
         }
     };
@@ -84,12 +81,12 @@ fn main() {
         .map(|record|
             // TODO: don't translate, instead defer until later
             record.map(|r| {
-                let FastaNT { name, sequence } = r.recode_to_dna();
+                let Fasta { header, sequence } = r.recode_to_dna();
                    let residues = sequence.to_aa_iter_with(b'X').collect();
                 let valid_range = get_valid_range(&residues, args.restrict_to_pairwise_alignable);
 
                 ValidSeq {
-                    name, residues,
+                    header, residues,
                     codons: sequence,
                     valid_range
                 }
@@ -97,8 +94,8 @@ fn main() {
         .collect::<Result<Vec<_>, _>>()
         .unwrap_or_die("Could not process other data.");
 
-    let mut buffer = format!("{delim}{name}", name = reference.name);
-    for query_header in other_sequences.iter().map(|f| f.name.as_str()) {
+    let mut buffer = format!("{delim}{header}", header = reference.header);
+    for query_header in other_sequences.iter().map(|f| f.header.as_str()) {
         buffer.push(delim);
         buffer.push_str(query_header);
     }
@@ -109,7 +106,7 @@ fn main() {
         buffer.clear();
 
         for ValidSeq {
-            name: _,
+            header: _,
             residues,
             codons,
             valid_range,
@@ -153,7 +150,7 @@ fn main() {
 }
 
 struct ValidSeq {
-    name:        String,
+    header:      String,
     residues:    AminoAcids,
     codons:      Nucleotides,
     valid_range: std::ops::Range<usize>,

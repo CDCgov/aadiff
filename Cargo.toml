@@ -7,7 +7,7 @@ edition = "2024"
 clap = { version = "4", features = ["derive"] }
 either = "1"
 
-zoe = { version = "0.0.31", default-features = false, features = [
+zoe = { git = "https://git.biotech.cdc.gov/flu-informatics/zoe.git", branch = "stabilize_generic_fasta", default-features = false, features = [
     "multiversion",
 ] }
 
